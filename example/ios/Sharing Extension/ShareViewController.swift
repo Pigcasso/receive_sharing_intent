@@ -54,7 +54,7 @@ class ShareViewController: SLComposeServiceViewController {
 
         // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
         if let content = extensionContext!.inputItems[0] as? NSExtensionItem {
-            if let contents = content.attachments {
+            if let contents = content.attachments as? [NSItemProvider] {
                 for (index, attachment) in (contents).enumerated() {
                     if attachment.hasItemConformingToTypeIdentifier(imageContentType) {
                         handleImages(content: content, attachment: attachment, index: index)
@@ -84,8 +84,8 @@ class ShareViewController: SLComposeServiceViewController {
     private func handleText (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
         attachment.loadItem(forTypeIdentifier: textContentType, options: nil) { [weak self] data, error in
 
-            if error == nil, let item = data as? String, let this = self {
-
+            if error == nil, let fileUrl = data as? URL, let this = self {
+                let item = fileUrl.path
                 this.sharedText.append(item)
 
                 // If this is the last item, save imagesData in userDefaults and redirect to host app
@@ -221,7 +221,10 @@ class ShareViewController: SLComposeServiceViewController {
         }
 
         alert.addAction(action)
-        present(alert, animated: true, completion: nil)
+        DispatchQueue.main.async {
+            self.present(alert, animated: true, completion: nil)
+        }
+        
         extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
     }
 
@@ -305,8 +308,8 @@ class ShareViewController: SLComposeServiceViewController {
         //        let scale = UIScreen.main.scale
         assetImgGenerate.maximumSize =  CGSize(width: 360, height: 360)
         do {
-            let img = try assetImgGenerate.copyCGImage(at: CMTimeMakeWithSeconds(600, preferredTimescale: Int32(1.0)), actualTime: nil)
-            try UIImage.pngData(UIImage(cgImage: img))()?.write(to: thumbnailPath)
+            let img = try assetImgGenerate.copyCGImage(at: CMTimeMakeWithSeconds(600, Int32(1.0)), actualTime: nil)
+            try UIImagePNGRepresentation(UIImage(cgImage: img))?.write(to: thumbnailPath)
             saved = true
         } catch {
             saved = false
