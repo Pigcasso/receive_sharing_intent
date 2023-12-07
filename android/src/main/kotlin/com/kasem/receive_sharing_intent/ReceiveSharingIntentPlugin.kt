@@ -114,6 +114,7 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
         when {
             (intent.type?.startsWith("text") != true)
                     && (intent.action == Intent.ACTION_SEND
+                    || intent.action == Intent.ACTION_VIEW
                     || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing images or videos
 
                 val value = getMediaUris(intent)
@@ -141,8 +142,8 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
         if (intent == null) return null
 
         return when (intent.action) {
-            Intent.ACTION_SEND -> {
-                val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            Intent.ACTION_SEND, Intent.ACTION_VIEW -> {
+                val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: intent.data
                 val path = uri?.let{ FileDirectory.getAbsolutePath(applicationContext, it) }
                 if (path != null) {
                     val type = getMediaType(path)
