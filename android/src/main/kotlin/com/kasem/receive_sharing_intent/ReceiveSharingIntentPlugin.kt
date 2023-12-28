@@ -6,7 +6,10 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -16,6 +19,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.PluginRegistry.ActivityResultListener
 import io.flutter.plugin.common.PluginRegistry.Registrar
 import io.flutter.plugin.common.PluginRegistry.NewIntentListener
 import org.json.JSONArray
@@ -29,7 +33,7 @@ private const val EVENTS_CHANNEL_MEDIA = "receive_sharing_intent/events-media"
 private const val EVENTS_CHANNEL_TEXT = "receive_sharing_intent/events-text"
 
 class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandler,
-        EventChannel.StreamHandler, NewIntentListener {
+        EventChannel.StreamHandler, NewIntentListener, ActivityResultListener {
 
     private var initialMedia: JSONArray? = null
     private var latestMedia: JSONArray? = null
@@ -86,6 +90,8 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     // depending on the user's project. onAttachedToEngine or registerWith must both be defined
     // in the same class.
     companion object {
+        private val REQUEST_CODE = ReceiveSharingIntentPlugin::class.java.hashCode() + 43 and 0x0000ffff
+
         @JvmStatic
         fun registerWith(registrar: Registrar) {
             val instance = ReceiveSharingIntentPlugin()
@@ -120,7 +126,9 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
                 val value = getMediaUris(intent)
                 if (initial) initialMedia = value
                 latestMedia = value
-                eventSinkMedia?.success(latestMedia?.toString())
+                checkPermissionGranted {
+                    eventSinkMedia?.success(latestMedia?.toString())
+                }
             }
             (intent.type == null || intent.type?.startsWith("text") == true)
                     && intent.action == Intent.ACTION_SEND -> { // Sharing text
@@ -217,24 +225,62 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         this.binding = binding
         binding.addOnNewIntentListener(this)
+        binding.addActivityResultListener(this)
         handleIntent(binding.activity.intent, true)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
         binding?.removeOnNewIntentListener(this)
+        binding?.removeActivityResultListener(this)
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         this.binding = binding
         binding.addOnNewIntentListener(this)
+        binding.addActivityResultListener(this)
     }
 
     override fun onDetachedFromActivity() {
         binding?.removeOnNewIntentListener(this)
+        binding?.removeActivityResultListener(this)
     }
 
     override fun onNewIntent(intent: Intent): Boolean {
         handleIntent(intent, false)
         return false
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode == REQUEST_CODE) {
+            if (isPermissionGranted()) {
+                eventSinkMedia?.success(latestMedia?.toString())
+            }
+        }
+        return false
+    }
+
+    private fun checkPermissionGranted(callback: () -> Unit) {
+        if (isPermissionGranted()) {
+            callback()
+        } else {
+            askForPermission()
+        }
+    }
+
+    private fun isPermissionGranted(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+    }
+
+    private fun askForPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val activity = binding?.activity ?: return
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+              .setData(Uri.fromParts("package", activity.packageName, null))
+            activity.startActivityForResult(intent, REQUEST_CODE)
+        }
     }
 }
