@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -90,6 +91,7 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     // depending on the user's project. onAttachedToEngine or registerWith must both be defined
     // in the same class.
     companion object {
+        private const val TAG = "ReceiveSharingIntent"
         private val REQUEST_CODE = ReceiveSharingIntentPlugin::class.java.hashCode() + 43 and 0x0000ffff
 
         @JvmStatic
@@ -280,7 +282,11 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
             val activity = binding?.activity ?: return
             val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
               .setData(Uri.fromParts("package", activity.packageName, null))
-            activity.startActivityForResult(intent, REQUEST_CODE)
+            try {
+                activity.startActivityForResult(intent, REQUEST_CODE)
+            } catch (e: Exception) {
+                Log.e(TAG, "askForPermission: ", e)
+            }
         }
     }
 }
